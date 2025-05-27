@@ -26,18 +26,14 @@ async function run() {
   try {
     // all collections here
     const jobsCollection = client.db('careerLoop').collection('jobs');
+    const applicationsCollection = client.db('careerLoop').collection('applications')
 
-    // all routes here
+    // jobs related api's here
     app.get('/jobs', async(req, res) => {
       const result = await jobsCollection.find().toArray();
       res.send(result);
     })
 
-    // get all users
-  //  app.get('/users', async (req, res) => {
-  //     const result = await usersCollection.find().toArray();
-  //     res.send(result);
-  //   })
     //get a single job
     app.get('/jobs/:id', async (req, res) => {
       const id = req.params.id;
@@ -45,6 +41,15 @@ async function run() {
       const result = await jobsCollection.findOne(query);
       res.send(result);
     })
+
+    // applications related api's here
+    app.post('/applications', async(req, res)=>{
+      const application = req.body;
+      const result = await applicationsCollection.insertOne(application);
+      res.send(result);
+    })
+
+
     // post / create a user
     //  app.post('/users', async (req, res) => {
     //   const userData = req.body;
