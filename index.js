@@ -30,7 +30,14 @@ async function run() {
 
     // jobs related api's here
     app.get('/jobs', async(req, res) => {
-      const result = await jobsCollection.find().toArray();
+      //filtered by email
+      const email = req.query.email;
+      const query = {};
+      if(email) {
+        query.hr_email = email;
+      }
+
+      const result = await jobsCollection.find(query).toArray();
       res.send(result);
     })
 
@@ -43,7 +50,7 @@ async function run() {
     })
 
     //post a single job
-    app.get('/jobs', async(req, res)=>{
+    app.post('/jobs', async(req, res)=>{
       const newJob = req.body;
       const result =await jobsCollection.insertOne(newJob);
       res.send(result);
