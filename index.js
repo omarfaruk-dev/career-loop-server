@@ -42,6 +42,14 @@ async function run() {
       res.send(result);
     })
 
+    //post a single job
+    app.get('/jobs', async(req, res)=>{
+      const newJob = req.body;
+      const result =await jobsCollection.insertOne(newJob);
+      res.send(result);
+
+    })
+
     // applications related api's here
     app.get('/applications', async(req, res)=>{
       const email = req.query.email;
