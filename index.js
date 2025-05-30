@@ -123,6 +123,15 @@ async function run() {
       res.send(result)
     })
 
+    //delete an application
+    app.delete('/applications/:id', async(req, res) =>{
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)}
+      
+      const result = await applicationsCollection.deleteOne(filter)
+      res.send(result)
+    })
+
     
     // await client.connect();
     // Send a ping to confirm a successful connection
