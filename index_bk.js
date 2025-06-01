@@ -4,51 +4,73 @@ require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-//firebase SDK
-const admin = require("firebase-admin");
-const serviceAccount = require("./firebase-admin-key.json");
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+
 
 
 //middleware
 app.use(cors({
   origin: ['http://localhost:5173'],
+  credentials: true
 }));
 app.use(express.json());
+app.use(cookieParser());
 
-//firebase SDK
+//firebase admin
+var admin = require("firebase-admin");
+
+var serviceAccount = require("./firebase-admin-key.json");
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-//firebase accessToken - step - 1
-const verifyFirebaseToken = async(req, res, next) => {
 
-  const authHeader = req.headers?.authorization;
 
-  if(!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).send({ message: 'Unauthorized Access' })
-  }
 
-  const token = authHeader.split(' ')[1];
 
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    console.log('decoded token:', decoded);
-    req.decoded = decoded;
-    next();
+const logger = (req, res, next) => {
+  console.log('inside the logger middleware');
+  next();
 
-  } 
-  catch (error) {
-    return res.status(401).send({ message: 'Unauthorized Access' }) 
-  }
 }
 
-//middleware / shared verify email token
-const verifyTokenEmail = (req, res, next) => {
-  if(req.query.email !== req.decoded.email){
-    return res.status(403).send({message: 'Forbidden Access'})
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token;
+
+  console.log('cookie in the middleware', req.cookies);
+  if (!token) {
+    return res.status(401).send({ message: 'unauthorized access' })
+
   }
+
+  //verify token jwt
+  jwt.verify(token, process.env.JWT_ACCESS_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: 'unauthorized access' })
+
+    }
+    req.decoded = decoded;
+    next();
+  })
+
+}
+
+//firebase accessToken
+const verifyFirebaseToken = async(req, res, next) => {
+  const authHeader = req.headers?.authorization;
+  const token = authHeader.split(' ')[1];
+
+  if(!token){
+    return res.status(401).send({ message: 'unauthorized access' })
+  }
+  const userInfo = await admin.auth().verifyIdToken(token);
+  // console.log('inside token: ', userInfo);
+  req.tokenEmail = userInfo.email;
   next();
+
+
 }
 
 
@@ -71,6 +93,20 @@ async function run() {
     const jobsCollection = client.db('careerLoop').collection('jobs');
     const applicationsCollection = client.db('careerLoop').collection('applications')
 
+    //jwt token related api
+    app.post('/jwt', async (req, res) => {
+      const userData = req.body;
+      const token = jwt.sign(userData, process.env.JWT_ACCESS_SECRET, { expiresIn: '1h' });
+
+      //set token in the cookies
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: false
+      })
+
+      res.send({ success: true });
+    })
+
     // jobs related api's here
     app.get('/jobs', async (req, res) => {
       //filtered by email
@@ -84,13 +120,8 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/jobs/applications',verifyFirebaseToken, async (req, res) => {
+    app.get('/jobs/applications', async (req, res) => {
       const email = req.query.email;
-
-      if(email !== req.decoded.email) {
-        return res.status(403).send({message: 'Forbidden Access'})
-      }
-
       const query = { hr_email: email };
       const jobs = await jobsCollection.find(query).toArray();
 
@@ -121,8 +152,12 @@ async function run() {
 
 
     // applications related api's here
-    app.get('/applications',verifyFirebaseToken, verifyTokenEmail, async (req, res) => {
+    app.get('/applications', logger,verifyFirebaseToken, async (req, res) => {
       const email = req.query.email;
+
+      if(req.tokenEmail != email){
+        return res.status(403).send({ message: 'forbidden access' })
+      }
 
       const query = {
         email: email
@@ -183,8 +218,8 @@ async function run() {
 
     // await client.connect();
     // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
-    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
